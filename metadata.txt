@@ -1,7 +1,8 @@
 # This file contains metadata for your plugin.
 
-# This file should be included when you package your plugin.# Mandatory items:
+# This file should be included when you package your plugin.
 
+# Mandatory items:
 [general]
 name=SGB Tools
 qgisMinimumVersion=3.0
