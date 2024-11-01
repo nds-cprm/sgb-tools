@@ -34,8 +34,12 @@ from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
                        QgsFeatureSink,
                        QgsProcessingAlgorithm,
-                       QgsProcessingParameterFeatureSource,
-                       QgsProcessingParameterFeatureSink)
+                       QgsProcessingParameterMapLayer,
+                       QgsProcessingParameterFile,
+                       QgsProject,
+                       QgsMapLayer,
+                       QgsProcessingOutputBoolean)
+from owslib import iso, etree
 
 
 class SGBToolsAlgorithm(QgsProcessingAlgorithm):
@@ -56,8 +60,9 @@ class SGBToolsAlgorithm(QgsProcessingAlgorithm):
     # used when calling the algorithm from another algorithm, or when
     # calling from the QGIS console.
 
+    INPUTMAPLAYER = 'INPUTMAPLAYER'
+    INPUTXML = 'INPUTXML'
     OUTPUT = 'OUTPUT'
-    INPUT = 'INPUT'
 
     def initAlgorithm(self, config):
         """
@@ -68,10 +73,10 @@ class SGBToolsAlgorithm(QgsProcessingAlgorithm):
         # We add the input vector features source. It can have any kind of
         # geometry.
         self.addParameter(
-            QgsProcessingParameterFeatureSource(
-                self.INPUT,
+            QgsProcessingParameterMapLayer(
+                self.INPUTMAPLAYER,
                 self.tr('Input layer'),
-                [QgsProcessing.TypeVectorAnyGeometry]
+                #[QgsProcessing.TypeMapLayer]
             )
         )
 
@@ -79,9 +84,16 @@ class SGBToolsAlgorithm(QgsProcessingAlgorithm):
         # usually takes the form of a newly created vector layer when the
         # algorithm is run in QGIS).
         self.addParameter(
-            QgsProcessingParameterFeatureSink(
+            QgsProcessingParameterFile(
+                self.INPUTXML,
+                self.tr('Input .xml file')
+            )
+        )
+
+        self.addOutput(
+            QgsProcessingOutputBoolean(
                 self.OUTPUT,
-                self.tr('Output layer')
+                self.tr('Return code')
             )
         )
 
@@ -89,37 +101,56 @@ class SGBToolsAlgorithm(QgsProcessingAlgorithm):
         """
         Here is where the processing itself takes place.
         """
+        xml_file = self.parameterAsFile(parameters, self.INPUTXML, context)
+        file_metadata = iso.MD_Metadata(etree.etree.parse(xml_file))
+        identification = file_metadata.identification
+        props_dict={}
+        for prop in dir(identification):
+            if prop.startswith('_'):
+                continue
+            props_dict[prop]=identification.__getattribute__(prop)
+        
 
-        # Retrieve the feature source and sink. The 'dest_id' variable is used
-        # to uniquely identify the feature sink, and must be included in the
-        # dictionary returned by the processAlgorithm function.
-        source = self.parameterAsSource(parameters, self.INPUT, context)
-        (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT,
-                context, source.fields(), source.wkbType(), source.sourceCrs())
+        layer = self.parameterAsLayer(parameters, self.INPUTMAPLAYER, context)
+        metadata = layer.metadata()
 
-        # Compute the number of steps to display within the progress bar and
-        # get features from source
-        total = 100.0 / source.featureCount() if source.featureCount() else 0
-        features = source.getFeatures()
+        metadata.setTitle(props_dict['title'])
 
-        for current, feature in enumerate(features):
-            # Stop the algorithm if cancel button has been clicked
-            if feedback.isCanceled():
-                break
+        layer.setMetadata(metadata)
 
-            # Add a feature in the sink
-            sink.addFeature(feature, QgsFeatureSink.FastInsert)
 
-            # Update the progress bar
-            feedback.setProgress(int(current * total))
+        ## Retrieve the feature source and sink. The 'dest_id' variable is used
+        ## to uniquely identify the feature sink, and must be included in the
+        ## dictionary returned by the processAlgorithm function.
+        #source = self.parameterAsSource(parameters, self.INPUT, context)
+        #(sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT,
+        #        context, source.fields(), source.wkbType(), source.sourceCrs())
 
-        # Return the results of the algorithm. In this case our only result is
-        # the feature sink which contains the processed features, but some
-        # algorithms may return multiple feature sinks, calculated numeric
-        # statistics, etc. These should all be included in the returned
-        # dictionary, with keys matching the feature corresponding parameter
-        # or output names.
-        return {self.OUTPUT: dest_id}
+        ## Compute the number of steps to display within the progress bar and
+        ## get features from source
+        #total = 100.0 / source.featureCount() if source.featureCount() else 0
+        #features = source.getFeatures()
+
+        #for current, feature in enumerate(features):
+        #    # Stop the algorithm if cancel button has been clicked
+        #    if feedback.isCanceled():
+        #        break
+
+        #    # Add a feature in the sink
+        #    sink.addFeature(feature, QgsFeatureSink.FastInsert)
+
+        #    # Update the progress bar
+        #    feedback.setProgress(int(current * total))
+
+        ## Return the results of the algorithm. In this case our only result is
+        ## the feature sink which contains the processed features, but some
+        ## algorithms may return multiple feature sinks, calculated numeric
+        ## statistics, etc. These should all be included in the returned
+        ## dictionary, with keys matching the feature corresponding parameter
+        ## or output names.
+        #return {self.OUTPUT: dest_id}
+        feedback.setProgress=100
+        return True
 
     def name(self):
         """
@@ -129,7 +160,7 @@ class SGBToolsAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Importar Metadado ISO-19115 para Camada'
+        return 'Importar Metadado ISO-19115'
 
     def displayName(self):
         """

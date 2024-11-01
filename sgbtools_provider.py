@@ -31,7 +31,7 @@ __copyright__ = '(C) 2024 by Carlos Eduardo Mota'
 __revision__ = '$Format:%H$'
 
 from qgis.core import QgsProcessingProvider
-from .sgbtools_algorithm import SGBToolsAlgorithm
+from .import_iso_metadata import SGBToolsAlgorithm
 
 
 class SGBToolsProvider(QgsProcessingProvider):
