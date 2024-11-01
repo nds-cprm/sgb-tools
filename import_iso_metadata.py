@@ -40,6 +40,10 @@ from qgis.core import (QgsProcessing,
                        QgsMapLayer,
                        QgsProcessingOutputBoolean)
 from owslib import iso, etree
+#owslib is spitting a lot of future change warnings those will be ignored
+#for now
+import warnings
+warnings.filterwarnings('ignore', module='owslib')
 
 
 class SGBToolsAlgorithm(QgsProcessingAlgorithm):
@@ -115,7 +119,9 @@ class SGBToolsAlgorithm(QgsProcessingAlgorithm):
         metadata = layer.metadata()
 
         metadata.setTitle(props_dict['title'])
+        metadata.setAbstract(props_dict['abstract'])
 
+        #Set new metadata
         layer.setMetadata(metadata)
 
 
@@ -149,8 +155,8 @@ class SGBToolsAlgorithm(QgsProcessingAlgorithm):
         ## dictionary, with keys matching the feature corresponding parameter
         ## or output names.
         #return {self.OUTPUT: dest_id}
-        feedback.setProgress=100
-        return True
+        feedback.setProgress(int(100))
+        return {self.OUTPUT: True}
 
     def name(self):
         """
