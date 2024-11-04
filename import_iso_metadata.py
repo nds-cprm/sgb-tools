@@ -40,6 +40,7 @@ from qgis.core import (QgsProcessing,
                        QgsMapLayer,
                        QgsProcessingOutputBoolean,
                        QgsRectangle,
+                       QgsCoordinateReferenceSystem,
                        QgsLayerMetadata,
                        QgsAbstractMetadataBase)
 from owslib import iso, etree
@@ -48,8 +49,22 @@ from owslib import iso, etree
 import warnings
 warnings.filterwarnings('ignore', module='owslib')
 
+def createSpatialExtent(
+        bbox_rect:QgsRectangle,
+        bbox_crs:QgsCoordinateReferenceSystem)->QgsLayerMetadata.Extent:
+    spatial_extent = QgsLayerMetadata.SpatialExtent()
+    spatial_extent.bounds.setXMinimum(bbox_rect.xMinimum())
+    spatial_extent.bounds.setYMinimum(bbox_rect.yMinimum())
+    spatial_extent.bounds.setXMaximum(bbox_rect.xMaximum())
+    spatial_extent.bounds.setYMaximum(bbox_rect.yMaximum())
+    spatial_extent.extentCrs = bbox_crs
 
-class SGBToolsAlgorithm(QgsProcessingAlgorithm):
+    md_extent = QgsLayerMetadata.Extent()
+    md_extent.setSpatialExtents([spatial_extent])
+    return md_extent
+
+
+class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
     """
     This is an example algorithm that takes a vector layer and
     creates a new identical one.
@@ -180,15 +195,7 @@ class SGBToolsAlgorithm(QgsProcessingAlgorithm):
             bbox_rect = layer.extent()
             bbox_crs = layer.crs()
 
-        spatial_extent = QgsLayerMetadata.SpatialExtent()
-        spatial_extent.bounds.setXMinimum(bbox_rect.xMinimum())
-        spatial_extent.bounds.setYMinimum(bbox_rect.yMinimum())
-        spatial_extent.bounds.setXMaximum(bbox_rect.xMaximum())
-        spatial_extent.bounds.setYMaximum(bbox_rect.yMaximum())
-        spatial_extent.extentCrs = bbox_crs
-
-        md_extent = QgsLayerMetadata.Extent()
-        md_extent.setSpatialExtents([spatial_extent])
+        md_extent = createSpatialExtent(bbox_rect,bbox_crs)
         metadata.setExtent(md_extent)
 
         #Contacts
@@ -310,4 +317,4 @@ class SGBToolsAlgorithm(QgsProcessingAlgorithm):
         return QCoreApplication.translate('Processing', string)
 
     def createInstance(self):
-        return SGBToolsAlgorithm()
+        return ImportISOMetadataAlgorithm()

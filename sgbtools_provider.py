@@ -31,7 +31,8 @@ __copyright__ = '(C) 2024 by Carlos Eduardo Mota'
 __revision__ = '$Format:%H$'
 
 from qgis.core import QgsProcessingProvider
-from .import_iso_metadata import SGBToolsAlgorithm
+from .import_iso_metadata import ImportISOMetadataAlgorithm
+from .copy_metadata import CopyMetadataAlgorithm
 
 
 class SGBToolsProvider(QgsProcessingProvider):
@@ -53,7 +54,8 @@ class SGBToolsProvider(QgsProcessingProvider):
         """
         Loads all algorithms belonging to this provider.
         """
-        self.addAlgorithm(SGBToolsAlgorithm())
+        self.addAlgorithm(ImportISOMetadataAlgorithm())
+        self.addAlgorithm(CopyMetadataAlgorithm())
         # add additional algorithms here
         # self.addAlgorithm(MyOtherAlgorithm())
 
