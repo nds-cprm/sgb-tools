@@ -86,12 +86,12 @@ class CopyMetadataAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        self.addParameter(
-            QgsProcessingParameterMultipleLayers(
+        layerlist_parameter = QgsProcessingParameterMultipleLayers(
                 self.OUTPUTMAPLAYERLIST,
                 self.tr('Layers to copy to')
             )
-        )
+        layerlist_parameter.setMinimumNumberInputs(1)
+        self.addParameter(layerlist_parameter)
 
         extent_parameter = QgsProcessingParameterBoolean(
                 self.COPYEXTENT,
