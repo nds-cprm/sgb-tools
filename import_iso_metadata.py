@@ -42,7 +42,9 @@ from qgis.core import (QgsProcessing,
                        QgsRectangle,
                        QgsCoordinateReferenceSystem,
                        QgsLayerMetadata,
-                       QgsAbstractMetadataBase)
+                       QgsAbstractMetadataBase,
+                       QgsProcessingParameterBoolean,
+                       QgsProcessingParameterDefinition)
 from owslib import iso, etree
 #owslib is spitting a lot of future change warnings those will be ignored
 #for now
@@ -86,8 +88,8 @@ class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
     INPUTXML = 'INPUTXML'
     OUTPUT = 'OUTPUT'
 
+    COPYEXTENT = 'COPYEXTENT'
     #Fixed at false for now, it will be toggleable in advanced
-    BBOX_FROM_XML = False
     TYPE_FROM_XML = False
 
     category_dict = {
@@ -152,6 +154,14 @@ class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+        extent_parameter = QgsProcessingParameterBoolean(
+                self.COPYEXTENT,
+                self.tr('Get extent from metadata file'),
+                defaultValue=False,
+            )
+        extent_parameter.setFlags(QgsProcessingParameterDefinition.FlagAdvanced)
+        self.addParameter(extent_parameter)
+
     def processAlgorithm(self, parameters, context, feedback):
         """
         Here is where the processing itself takes place.
@@ -169,6 +179,9 @@ class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
         layer = self.parameterAsLayer(parameters, self.INPUTMAPLAYER, context)
         metadata = layer.metadata()
 
+        #Identifier
+        metadata.setIdentifier(file_metadata.identifier)
+
         #Title
         metadata.setTitle(props_dict['title'])
 
@@ -182,15 +195,14 @@ class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
         #Bounding box
         #spatial extent and temporal extent are defined together
         #For now ignoring temporal extent
-        if self.BBOX_FROM_XML:
+        if self.parameterAsBool(parameters,self.COPYEXTENT,context):
             xml_bbox = props_dict['bbox']
             bbox_rect = QgsRectangle(float(xml_bbox.minx),
                                      float(xml_bbox.miny),
                                      float(xml_bbox.maxx),
                                      float(xml_bbox.maxy))
-            #OWSLIB parser does not bring the crs from the xml??
-            #bbox_crs = QgsCoordinateReferenceSystem(
-            #    bbox_crs[props_dict[]])
+            bbox_crs = QgsCoordinateReferenceSystem(
+                self.crs_dict[file_metadata.referencesystem.code])
         else:
             bbox_rect = layer.extent()
             bbox_crs = layer.crs()
@@ -240,7 +252,10 @@ class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
         #Purpose not implemented in qgis
 
         #Language
-        metadata.setLanguage(', '.join(props_dict['resourcelanguagecode']))
+        if props_dict['resourcelanguage']:
+            metadata.setLanguage(', '.join(props_dict['resourcelanguage']))
+        else:
+            metadata.setLanguage(', '.join(props_dict['resourcelanguagecode']))
 
         #Set new metadata
         layer.setMetadata(metadata)
