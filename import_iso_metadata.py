@@ -38,7 +38,10 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFile,
                        QgsProject,
                        QgsMapLayer,
-                       QgsProcessingOutputBoolean)
+                       QgsProcessingOutputBoolean,
+                       QgsRectangle,
+                       QgsLayerMetadata,
+                       QgsAbstractMetadataBase)
 from owslib import iso, etree
 #owslib is spitting a lot of future change warnings those will be ignored
 #for now
@@ -67,6 +70,39 @@ class SGBToolsAlgorithm(QgsProcessingAlgorithm):
     INPUTMAPLAYER = 'INPUTMAPLAYER'
     INPUTXML = 'INPUTXML'
     OUTPUT = 'OUTPUT'
+
+    #Fixed at false for now, it will be toggleable in advanced
+    BBOX_FROM_XML = False
+    TYPE_FROM_XML = False
+
+    category_dict = {
+        'biota': 'Biota',
+        'boundaries': 'Boundaries',
+        'climatologyMeteorologyAtmosphere': 'Climatology Meteorology Atmosphere',
+        'economy': 'Economy',
+        'elevation': 'Elevation',
+        'environment': 'Environment',
+        'farming': 'Farming',
+        'geoscientificInformation': 'Geoscientific Information',
+        'health': 'Health',
+        'imageryBaseMapsEarthCover': 'Imagery Base Maps Earth Cover',
+        'inlandWaters': 'Inland Waters',
+        'intelligenceMilitary': 'Intelligence Military',
+        'location': 'Location',
+        'oceans': 'Oceans',
+        'planningCadastre': 'Planning Cadastre',
+        'society': 'Society',
+        'structure': 'Structure',
+        'transportation': 'Transportation',
+        'utilitiesCommunication': 'Utilities Communication'
+    }
+
+    crs_dict = {
+        'WGS84':'EPSG:4326',
+        'SIRGAS2000':'EPSG:4674',
+        'SAD1969':'EPSG:4618',
+        'CORREGOALEGRE':'EPSG:4225'
+    }
 
     def initAlgorithm(self, config):
         """
@@ -118,8 +154,86 @@ class SGBToolsAlgorithm(QgsProcessingAlgorithm):
         layer = self.parameterAsLayer(parameters, self.INPUTMAPLAYER, context)
         metadata = layer.metadata()
 
+        #Title
         metadata.setTitle(props_dict['title'])
+
+        #Abstract
         metadata.setAbstract(props_dict['abstract'])
+        
+        #Topic Category
+        metadata.setCategories([self.category_dict[category]
+                                for category in props_dict['topiccategory']])
+        
+        #Bounding box
+        #spatial extent and temporal extent are defined together
+        #For now ignoring temporal extent
+        if self.BBOX_FROM_XML:
+            xml_bbox = props_dict['bbox']
+            bbox_rect = QgsRectangle(float(xml_bbox.minx),
+                                     float(xml_bbox.miny),
+                                     float(xml_bbox.maxx),
+                                     float(xml_bbox.maxy))
+            #OWSLIB parser does not bring the crs from the xml??
+            #bbox_crs = QgsCoordinateReferenceSystem(
+            #    bbox_crs[props_dict[]])
+        else:
+            bbox_rect = layer.extent()
+            bbox_crs = layer.crs()
+
+        spatial_extent = QgsLayerMetadata.SpatialExtent()
+        spatial_extent.bounds.setXMinimum(bbox_rect.xMinimum())
+        spatial_extent.bounds.setYMinimum(bbox_rect.yMinimum())
+        spatial_extent.bounds.setXMaximum(bbox_rect.xMaximum())
+        spatial_extent.bounds.setYMaximum(bbox_rect.yMaximum())
+        spatial_extent.extentCrs = bbox_crs
+
+        md_extent = QgsLayerMetadata.Extent()
+        md_extent.setSpatialExtents([spatial_extent])
+        metadata.setExtent(md_extent)
+
+        #Contacts
+        xml_contact_list = props_dict['contact']
+        metadata.setContacts([])
+        for contact in xml_contact_list:
+            qgis_contact = QgsAbstractMetadataBase.Contact()
+            qgis_contact.name = contact.name
+            qgis_contact.role = contact.role
+            qgis_contact.organization = contact.organization
+            qgis_contact.position = contact.position
+            qgis_contact.email = contact.email
+            qgis_contact.voice = contact.phone
+            qgis_contact.fax = contact.fax
+            #address not implemented yet; not available in our metadata?
+
+            metadata.addContact(qgis_contact)
+
+        #Creator not implemented on qgis
+
+        #Date not implemented on qgis
+
+        #Type
+        if self.TYPE_FROM_XML:
+            metadata.setType = props_dict['identtype']
+
+        #Keywords
+        xml_keywords = props_dict['keywords']
+        keyword_dict = {}
+        for keyword in xml_keywords:
+            keyword_vocabulary = keyword['type']
+            keywords_list = keyword['keywords']
+            if keyword_vocabulary in keyword_dict:
+                keyword_dict[keyword_vocabulary] += keywords_list
+                keyword_dict[keyword_vocabulary] = list(set(
+                    keyword_dict[keyword_vocabulary]))
+            else:
+                keyword_dict[keyword_vocabulary] = list(set(keywords_list))
+        for vocabulary in keyword_dict.keys():
+            metadata.addKeywords(vocabulary,keyword_dict[vocabulary])
+        
+        #Purpose not implemented in qgis
+
+        #Language
+        metadata.setLanguage(', '.join(props_dict['resourcelanguagecode']))
 
         #Set new metadata
         layer.setMetadata(metadata)
