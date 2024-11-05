@@ -90,7 +90,7 @@ class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
 
     COPYEXTENT = 'COPYEXTENT'
     #Fixed at false for now, it will be toggleable in advanced
-    TYPE_FROM_XML = False
+    COPYTYPE = 'COPYTYPE'
 
     category_dict = {
         'biota': 'Biota',
@@ -162,6 +162,14 @@ class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
         extent_parameter.setFlags(QgsProcessingParameterDefinition.FlagAdvanced)
         self.addParameter(extent_parameter)
 
+        type_parameter = QgsProcessingParameterBoolean(
+                self.COPYTYPE,
+                self.tr('Get data type from metadata file'),
+                defaultValue=False,
+            )
+        type_parameter.setFlags(QgsProcessingParameterDefinition.FlagAdvanced)
+        self.addParameter(type_parameter)
+
     def processAlgorithm(self, parameters, context, feedback):
         """
         Here is where the processing itself takes place.
@@ -231,8 +239,8 @@ class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
         #Date not implemented on qgis
 
         #Type
-        if self.TYPE_FROM_XML:
-            metadata.setType = props_dict['identtype']
+        if self.parameterAsBool(parameters,self.COPYTYPE,context):
+            metadata.setType(props_dict['identtype'])
 
         #Keywords
         xml_keywords = props_dict['keywords']
