@@ -208,7 +208,17 @@ class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
                 qgis_contact.email = contact.email
                 qgis_contact.voice = contact.phone
                 qgis_contact.fax = contact.fax
-                #address not implemented yet; not available in our metadata?
+                #Address - This expects a single address 
+                #is it suposed to be a list?
+                qgs_address = QgsAbstractMetadataBase.Address()
+                qgs_address.city = contact.city
+                qgs_address.country = contact.country
+                qgs_address.postalCode = contact.postcode
+                qgs_address.address = contact.address
+                qgs_address.administrativeArea = contact.region
+                #No type in metadata
+                #qgs_address.type = ??
+                qgis_contact.addresses = [qgs_address]
 
                 metadata.addContact(qgis_contact)
 
