@@ -31,33 +31,36 @@ __copyright__ = '(C) 2024 by Carlos Eduardo Mota'
 __revision__ = '$Format:%H$'
 
 from qgis.PyQt.QtCore import QCoreApplication
-from qgis.core import (QgsProcessing,
-                       QgsFeatureSink,
-                       QgsProcessingAlgorithm,
-                       QgsProcessingParameterFeatureSource,
-                       QgsProcessingParameterFeatureSink)
+from qgis.core import (QgsProcessingAlgorithm,
+                       QgsProcessingParameterMapLayer,
+                       QgsProcessingParameterMultipleLayers,
+                       QgsProcessingOutputBoolean,
+                       QgsProcessingParameterBoolean,
+                       QgsProcessingParameterDefinition)
+from owslib import iso, etree
+#owslib is spitting a lot of future change warnings those will be ignored
+#for now
+import warnings
+warnings.filterwarnings('ignore', module='owslib')
+
+from .import_iso_metadata import createSpatialExtent
 
 
-class SGBToolsAlgorithm(QgsProcessingAlgorithm):
+class CopyMetadataAlgorithm(QgsProcessingAlgorithm):
     """
-    This is an example algorithm that takes a vector layer and
-    creates a new identical one.
-
-    It is meant to be used as an example of how to create your own
-    algorithms and explain methods and variables used to do it. An
-    algorithm like this will be available in all elements, and there
-    is not need for additional work.
-
-    All Processing algorithms should extend the QgsProcessingAlgorithm
-    class.
+    This algorithm copy the metadata from one MapLayer to one or several
+    other MapLayers.
     """
 
     # Constants used to refer to parameters and outputs. They will be
     # used when calling the algorithm from another algorithm, or when
     # calling from the QGIS console.
 
+    INPUTMAPLAYER = 'INPUTMAPLAYER'
+    OUTPUTMAPLAYERLIST = 'OUTPUTMAPLAYERLIST'
     OUTPUT = 'OUTPUT'
-    INPUT = 'INPUT'
+
+    COPYEXTENT = 'COPYEXTENT'
 
     def initAlgorithm(self, config):
         """
@@ -65,61 +68,53 @@ class SGBToolsAlgorithm(QgsProcessingAlgorithm):
         with some other properties.
         """
 
-        # We add the input vector features source. It can have any kind of
-        # geometry.
         self.addParameter(
-            QgsProcessingParameterFeatureSource(
-                self.INPUT,
-                self.tr('Input layer'),
-                [QgsProcessing.TypeVectorAnyGeometry]
+            QgsProcessingParameterMapLayer(
+                self.INPUTMAPLAYER,
+                self.tr('Layer to copy from')
             )
         )
 
-        # We add a feature sink in which to store our processed features (this
-        # usually takes the form of a newly created vector layer when the
-        # algorithm is run in QGIS).
-        self.addParameter(
-            QgsProcessingParameterFeatureSink(
+        layerlist_parameter = QgsProcessingParameterMultipleLayers(
+                self.OUTPUTMAPLAYERLIST,
+                self.tr('Layers to copy to')
+            )
+        layerlist_parameter.setMinimumNumberInputs(1)
+        self.addParameter(layerlist_parameter)
+
+        extent_parameter = QgsProcessingParameterBoolean(
+                self.COPYEXTENT,
+                self.tr('Copy extent from metadata'),
+                defaultValue=False,
+            )
+        extent_parameter.setFlags(QgsProcessingParameterDefinition.FlagAdvanced)
+        self.addParameter(extent_parameter)
+
+        self.addOutput(
+            QgsProcessingOutputBoolean(
                 self.OUTPUT,
-                self.tr('Output layer')
+                self.tr('Return code')
             )
         )
 
     def processAlgorithm(self, parameters, context, feedback):
         """
         Here is where the processing itself takes place.
-        """
+        """      
+        input_layer = self.parameterAsLayer(parameters, self.INPUTMAPLAYER, context)
+        metadata = input_layer.metadata()
+        output_layer_list = self.parameterAsLayerList(parameters,self.OUTPUTMAPLAYERLIST,context)
+        for layer in output_layer_list:
+            new_metadata = metadata
+            if not self.parameterAsBoolean(parameters,self.COPYEXTENT,context):
+                bbox_rect = layer.extent()
+                bbox_crs = layer.crs()
+                md_extent = createSpatialExtent(bbox_rect,bbox_crs)
+                new_metadata.setExtent(md_extent)
+            layer.setMetadata(new_metadata)
 
-        # Retrieve the feature source and sink. The 'dest_id' variable is used
-        # to uniquely identify the feature sink, and must be included in the
-        # dictionary returned by the processAlgorithm function.
-        source = self.parameterAsSource(parameters, self.INPUT, context)
-        (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT,
-                context, source.fields(), source.wkbType(), source.sourceCrs())
-
-        # Compute the number of steps to display within the progress bar and
-        # get features from source
-        total = 100.0 / source.featureCount() if source.featureCount() else 0
-        features = source.getFeatures()
-
-        for current, feature in enumerate(features):
-            # Stop the algorithm if cancel button has been clicked
-            if feedback.isCanceled():
-                break
-
-            # Add a feature in the sink
-            sink.addFeature(feature, QgsFeatureSink.FastInsert)
-
-            # Update the progress bar
-            feedback.setProgress(int(current * total))
-
-        # Return the results of the algorithm. In this case our only result is
-        # the feature sink which contains the processed features, but some
-        # algorithms may return multiple feature sinks, calculated numeric
-        # statistics, etc. These should all be included in the returned
-        # dictionary, with keys matching the feature corresponding parameter
-        # or output names.
-        return {self.OUTPUT: dest_id}
+        feedback.setProgress(int(100))
+        return {self.OUTPUT: True}
 
     def name(self):
         """
@@ -129,7 +124,7 @@ class SGBToolsAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Importar Metadado ISO-19115 para Camada'
+        return 'Copiar Metadados'
 
     def displayName(self):
         """
@@ -159,4 +154,4 @@ class SGBToolsAlgorithm(QgsProcessingAlgorithm):
         return QCoreApplication.translate('Processing', string)
 
     def createInstance(self):
-        return SGBToolsAlgorithm()
+        return CopyMetadataAlgorithm()
