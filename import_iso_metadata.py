@@ -64,16 +64,8 @@ def createSpatialExtent(
 
 class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
     """
-    This is an example algorithm that takes a vector layer and
-    creates a new identical one.
-
-    It is meant to be used as an example of how to create your own
-    algorithms and explain methods and variables used to do it. An
-    algorithm like this will be available in all elements, and there
-    is not need for additional work.
-
-    All Processing algorithms should extend the QgsProcessingAlgorithm
-    class.
+    This algorithm takes an .xml ISO-19115 metadata file and apply to the
+    QGIS layer metadata for each selected layer.
     """
 
     INPUTMAPLAYERLIST = 'INPUTMAPLAYERLIST'
@@ -250,6 +242,22 @@ class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
                 metadata.setLanguage(', '.join(props_dict['resourcelanguage']))
             else:
                 metadata.setLanguage(', '.join(props_dict['resourcelanguagecode']))
+
+            ## Verify if Licenses, rights and constraints are taking data
+            ##from the correct xml paths
+            #Licenses
+            metadata.setLicenses(props_dict['accessconstraints'])
+
+            #Rights
+            metadata.setRights(props_dict['useconstraints'])
+
+            #Other constraints
+            metadata.setConstraints([])
+            for xml_constraint in props_dict['otherconstraints']:
+                qgs_constraint = QgsLayerMetadata.Constraint()
+                qgs_constraint.constraint = xml_constraint
+                qgs_constraint.type = 'other'
+                metadata.addConstraint(qgs_constraint)
 
             #Set new metadata
             layer.setMetadata(metadata)
