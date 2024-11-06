@@ -36,9 +36,6 @@ from qgis.core import (QgsProcessingAlgorithm,
                        QgsProcessingParameterMultipleLayers,
                        QgsProcessingOutputBoolean,
                        QgsProcessingParameterBoolean,
-                       QgsRectangle,
-                       QgsLayerMetadata,
-                       QgsAbstractMetadataBase,
                        QgsProcessingParameterDefinition)
 from owslib import iso, etree
 #owslib is spitting a lot of future change warnings those will be ignored
@@ -51,16 +48,8 @@ from .import_iso_metadata import createSpatialExtent
 
 class CopyMetadataAlgorithm(QgsProcessingAlgorithm):
     """
-    This is an example algorithm that takes a vector layer and
-    creates a new identical one.
-
-    It is meant to be used as an example of how to create your own
-    algorithms and explain methods and variables used to do it. An
-    algorithm like this will be available in all elements, and there
-    is not need for additional work.
-
-    All Processing algorithms should extend the QgsProcessingAlgorithm
-    class.
+    This algorithm copy the metadata from one MapLayer to one or several
+    other MapLayers.
     """
 
     # Constants used to refer to parameters and outputs. They will be
