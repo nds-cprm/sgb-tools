@@ -259,6 +259,17 @@ class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
                 qgs_constraint.type = 'other'
                 metadata.addConstraint(qgs_constraint)
 
+            #Links
+            metadata.setLinks([])
+            for xml_link in file_metadata.distribution.online:
+                qgs_link = QgsAbstractMetadataBase.Link()
+                qgs_link.description = xml_link.description
+                qgs_link.type = xml_link.protocol
+                qgs_link.name = xml_link.name
+                qgs_link.url = xml_link.url
+                qgs_link.format = xml_link.function
+                metadata.addLink(qgs_link)
+
             #Set new metadata
             layer.setMetadata(metadata)
 
