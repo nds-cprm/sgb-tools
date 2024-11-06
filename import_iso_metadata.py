@@ -31,20 +31,16 @@ __copyright__ = '(C) 2024 by Carlos Eduardo Mota'
 __revision__ = '$Format:%H$'
 
 from qgis.PyQt.QtCore import QCoreApplication
-from qgis.core import (QgsProcessing,
-                       QgsFeatureSink,
-                       QgsProcessingAlgorithm,
-                       QgsProcessingParameterMapLayer,
+from qgis.core import (QgsProcessingAlgorithm,
                        QgsProcessingParameterFile,
-                       QgsProject,
-                       QgsMapLayer,
                        QgsProcessingOutputBoolean,
                        QgsRectangle,
                        QgsCoordinateReferenceSystem,
                        QgsLayerMetadata,
                        QgsAbstractMetadataBase,
                        QgsProcessingParameterBoolean,
-                       QgsProcessingParameterDefinition)
+                       QgsProcessingParameterDefinition,
+                       QgsProcessingParameterMultipleLayers)
 from owslib import iso, etree
 #owslib is spitting a lot of future change warnings those will be ignored
 #for now
@@ -80,7 +76,7 @@ class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
     class.
     """
 
-    INPUTMAPLAYER = 'INPUTMAPLAYER'
+    INPUTMAPLAYERLIST = 'INPUTMAPLAYERLIST'
     INPUTXML = 'INPUTXML'
     OUTPUT = 'OUTPUT'
 
@@ -122,13 +118,12 @@ class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
         with some other properties.
         """
 
-        self.addParameter(
-            QgsProcessingParameterMapLayer(
-                self.INPUTMAPLAYER,
-                self.tr('Input layer'),
-                #[QgsProcessing.TypeMapLayer]
+        layerlist_parameter = QgsProcessingParameterMultipleLayers(
+                self.INPUTMAPLAYERLIST,
+                self.tr('Layers to import metadata to')
             )
-        )
+        layerlist_parameter.setMinimumNumberInputs(1)
+        self.addParameter(layerlist_parameter)
 
         self.addParameter(
             QgsProcessingParameterFile(
@@ -173,90 +168,91 @@ class ImportISOMetadataAlgorithm(QgsProcessingAlgorithm):
                 continue
             props_dict[prop]=identification.__getattribute__(prop)
         
+        for layer in self.parameterAsLayerList(parameters,
+                                               self.INPUTMAPLAYERLIST,context):
+            #layer = self.parameterAsLayer(parameters, self.INPUTMAPLAYER, context)
+            metadata = layer.metadata()
 
-        layer = self.parameterAsLayer(parameters, self.INPUTMAPLAYER, context)
-        metadata = layer.metadata()
+            #Identifier
+            metadata.setIdentifier(file_metadata.identifier)
 
-        #Identifier
-        metadata.setIdentifier(file_metadata.identifier)
+            #Title
+            metadata.setTitle(props_dict['title'])
 
-        #Title
-        metadata.setTitle(props_dict['title'])
-
-        #Abstract
-        metadata.setAbstract(props_dict['abstract'])
-        
-        #Topic Category
-        metadata.setCategories([self.category_dict[category]
-                                for category in props_dict['topiccategory']])
-        
-        #Bounding box
-        #spatial extent and temporal extent are defined together
-        #For now ignoring temporal extent
-        if self.parameterAsBool(parameters,self.COPYEXTENT,context):
-            xml_bbox = props_dict['bbox']
-            bbox_rect = QgsRectangle(float(xml_bbox.minx),
-                                     float(xml_bbox.miny),
-                                     float(xml_bbox.maxx),
-                                     float(xml_bbox.maxy))
-            bbox_crs = QgsCoordinateReferenceSystem(
-                self.crs_dict[file_metadata.referencesystem.code])
-        else:
-            bbox_rect = layer.extent()
-            bbox_crs = layer.crs()
-
-        md_extent = createSpatialExtent(bbox_rect,bbox_crs)
-        metadata.setExtent(md_extent)
-
-        #Contacts
-        xml_contact_list = props_dict['contact']
-        metadata.setContacts([])
-        for contact in xml_contact_list:
-            qgis_contact = QgsAbstractMetadataBase.Contact()
-            qgis_contact.name = contact.name
-            qgis_contact.role = contact.role
-            qgis_contact.organization = contact.organization
-            qgis_contact.position = contact.position
-            qgis_contact.email = contact.email
-            qgis_contact.voice = contact.phone
-            qgis_contact.fax = contact.fax
-            #address not implemented yet; not available in our metadata?
-
-            metadata.addContact(qgis_contact)
-
-        #Creator not implemented on qgis
-
-        #Date not implemented on qgis
-
-        #Type
-        if self.parameterAsBool(parameters,self.COPYTYPE,context):
-            metadata.setType(props_dict['identtype'])
-
-        #Keywords
-        xml_keywords = props_dict['keywords']
-        keyword_dict = {}
-        for keyword in xml_keywords:
-            keyword_vocabulary = keyword['type']
-            keywords_list = keyword['keywords']
-            if keyword_vocabulary in keyword_dict:
-                keyword_dict[keyword_vocabulary] += keywords_list
-                keyword_dict[keyword_vocabulary] = list(set(
-                    keyword_dict[keyword_vocabulary]))
+            #Abstract
+            metadata.setAbstract(props_dict['abstract'])
+            
+            #Topic Category
+            metadata.setCategories([self.category_dict[category]
+                                    for category in props_dict['topiccategory']])
+            
+            #Bounding box
+            #spatial extent and temporal extent are defined together
+            #For now ignoring temporal extent
+            if self.parameterAsBool(parameters,self.COPYEXTENT,context):
+                xml_bbox = props_dict['bbox']
+                bbox_rect = QgsRectangle(float(xml_bbox.minx),
+                                        float(xml_bbox.miny),
+                                        float(xml_bbox.maxx),
+                                        float(xml_bbox.maxy))
+                bbox_crs = QgsCoordinateReferenceSystem(
+                    self.crs_dict[file_metadata.referencesystem.code])
             else:
-                keyword_dict[keyword_vocabulary] = list(set(keywords_list))
-        for vocabulary in keyword_dict.keys():
-            metadata.addKeywords(vocabulary,keyword_dict[vocabulary])
-        
-        #Purpose not implemented in qgis
+                bbox_rect = layer.extent()
+                bbox_crs = layer.crs()
 
-        #Language
-        if props_dict['resourcelanguage']:
-            metadata.setLanguage(', '.join(props_dict['resourcelanguage']))
-        else:
-            metadata.setLanguage(', '.join(props_dict['resourcelanguagecode']))
+            md_extent = createSpatialExtent(bbox_rect,bbox_crs)
+            metadata.setExtent(md_extent)
 
-        #Set new metadata
-        layer.setMetadata(metadata)
+            #Contacts
+            xml_contact_list = props_dict['contact']
+            metadata.setContacts([])
+            for contact in xml_contact_list:
+                qgis_contact = QgsAbstractMetadataBase.Contact()
+                qgis_contact.name = contact.name
+                qgis_contact.role = contact.role
+                qgis_contact.organization = contact.organization
+                qgis_contact.position = contact.position
+                qgis_contact.email = contact.email
+                qgis_contact.voice = contact.phone
+                qgis_contact.fax = contact.fax
+                #address not implemented yet; not available in our metadata?
+
+                metadata.addContact(qgis_contact)
+
+            #Creator not implemented on qgis
+
+            #Date not implemented on qgis
+
+            #Type
+            if self.parameterAsBool(parameters,self.COPYTYPE,context):
+                metadata.setType(props_dict['identtype'])
+
+            #Keywords
+            xml_keywords = props_dict['keywords']
+            keyword_dict = {}
+            for keyword in xml_keywords:
+                keyword_vocabulary = keyword['type']
+                keywords_list = keyword['keywords']
+                if keyword_vocabulary in keyword_dict:
+                    keyword_dict[keyword_vocabulary] += keywords_list
+                    keyword_dict[keyword_vocabulary] = list(set(
+                        keyword_dict[keyword_vocabulary]))
+                else:
+                    keyword_dict[keyword_vocabulary] = list(set(keywords_list))
+            for vocabulary in keyword_dict.keys():
+                metadata.addKeywords(vocabulary,keyword_dict[vocabulary])
+            
+            #Purpose not implemented in qgis
+
+            #Language
+            if props_dict['resourcelanguage']:
+                metadata.setLanguage(', '.join(props_dict['resourcelanguage']))
+            else:
+                metadata.setLanguage(', '.join(props_dict['resourcelanguagecode']))
+
+            #Set new metadata
+            layer.setMetadata(metadata)
 
         feedback.setProgress(int(100))
         return {self.OUTPUT: True}
